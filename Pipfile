@@ -9,6 +9,8 @@ black = "*"
 pytest = "*"
 pylint = "*"
 rich = "*"
+ipython = "*"
+pyyaml = "*"
 
 [dev-packages]
 
