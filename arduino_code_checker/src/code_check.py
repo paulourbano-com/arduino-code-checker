@@ -61,23 +61,6 @@ def comment_remover(text):
     return re.sub(pattern, replacer, text)
 
 
-def show_func_defs(filename):
-    file_contents = ""
-    with open(filename, "r", encoding="utf-8") as file_handler:
-        file_contents = file_handler.read()
-
-    # Remove comments
-    file_contents_no_comments = comment_remover(file_contents)
-
-    parser = c_parser.CParser()
-    ast = parser.parse(file_contents_no_comments, filename="<none-->")
-
-    # ast.show()
-
-    v = FuncDefVisitor()
-    v.visit(ast)
-
-
 def get_ast_from_file(filename):
     ast = None
 
@@ -183,5 +166,3 @@ if __name__ == "__main__":
     args = parser.parse_args().__dict__
 
     print(args)
-
-    # show_func_defs(filename)
