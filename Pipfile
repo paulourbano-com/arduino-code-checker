@@ -12,6 +12,7 @@ rich = "*"
 ipython = "*"
 pyyaml = "*"
 pytest-cov = "*"
+playwright = "*"
 
 [dev-packages]
 
