@@ -1,16 +1,22 @@
 import traceback
+import configparser
 from playwright.sync_api import Playwright, sync_playwright, expect
 from typing import List, Optional
 import os
+import sys
 import shutil
 import datetime
 
 
 def run(
     playwright: Playwright,
+    classroom_url: str,
+    user: str,
+    password: str,
     assigment_list: List[str],
-    student_list: Optional[List[str]] = None,
+    student_list: Optional[List[str]] = [],
     download_folder: str = "tinkercad_downloads",
+    headless: bool = False,
 ) -> None:
 
     if os.path.isdir(download_folder):
@@ -18,7 +24,7 @@ def run(
 
     os.mkdir(download_folder)
 
-    browser = playwright.firefox.launch(headless=True)
+    browser = playwright.firefox.launch(headless=headless)
     context = browser.new_context(viewport={"width": 1600, "height": 1200})
 
     # Open new page
@@ -38,7 +44,7 @@ def run(
     with page.expect_navigation():
         page.locator('a:has-text("Email or Username")').click()
 
-    page.locator('input[name="UserName"]').fill("paulo@paulourbano.com")
+    page.locator('input[name="UserName"]').fill(user)
 
     print("Opening Password...")
     with page.expect_navigation():
@@ -46,7 +52,7 @@ def run(
 
     page.locator('[aria-label="Password text field"]').click()
 
-    page.locator('[aria-label="Password text field"]').fill("TinkerCAD2022")
+    page.locator('[aria-label="Password text field"]').fill(password)
 
     print("Opening Submit...")
     with page.expect_navigation():
@@ -54,22 +60,33 @@ def run(
 
     print("Opening Classroom...")
     with page.expect_navigation():
-        page.locator('a[role="button"]:has-text("2022.1 Computação 1 - IF71A")').click()
+        page.locator('a[role="button"]:has-text(" ")').first.wait_for()
 
-    if student_list is None:
-        locator = page.locator("//span[contains(@class, 'name ng-star-inserted')]")
-        locator.nth(0).wait_for()
+    retries = 3
+    while len(student_list) == 0 and retries > 0:
+        try:
+            page.goto(classroom_url)
+            with page.expect_navigation():
+                locator = page.locator(
+                    "//span[contains(@class, 'name ng-star-inserted')]"
+                )
+            locator.nth(0).wait_for(timeout=10000)
 
-        count_rows = locator.count()
+            count_rows = locator.count()
 
-        student_list = []
-        for index in range(count_rows):
-            student_name = locator.nth(index).inner_text()
-            student_list.append(student_name)
+            student_list = []
+            for index in range(count_rows):
+                student_name = locator.nth(index).inner_text()
+                student_list.append(student_name)
+        except:
+            retries = retries - 1
 
     print(f"{student_list=}")
 
     for current_student in student_list:
+        if len(current_student) == 0:
+            continue
+
         print(f"\n{current_student=}")
 
         for current_assigment in assigment_list:
@@ -79,20 +96,15 @@ def run(
             while retries > 0 and not success:
                 print(f"\t{current_assigment=}")
 
-                source_file = os.path.join(
-                    download_folder,
-                    f'{current_student.replace(" ", "")}_{current_assigment}_code.ino',
-                )
-                pcb_file = os.path.join(
-                    download_folder,
-                    f'{current_student.replace(" ", "")}_{current_assigment}_circuit.brd',
-                )
-
-                page.goto("https://www.tinkercad.com/classrooms/cNhyXcecgXF")
+                page.goto(classroom_url)
 
                 try:
                     with page.expect_navigation():
-                        page.locator(f"text={current_student}").click()
+                        # page.locator(f"text={current_student}").click()
+                        complete_name = page.locator(
+                            f'a:has-text("{current_student}")'
+                        ).first.inner_text()
+                        page.locator(f'a:has-text("{current_student}")').first.click()
 
                     page.locator("#content >> text=Circuits").click()
 
@@ -103,42 +115,42 @@ def run(
 
                     base_page = page.url
 
-                    for index in range(results_count):
-                        if results_count > 1:
-                            source_file = os.path.join(
-                                download_folder,
-                                f'{current_student.replace(" ", "")}_{current_assigment}-{str(index+1).zfill(2)}_code.ino',
-                            )
-                            pcb_file = os.path.join(
-                                download_folder,
-                                f'{current_student.replace(" ", "")}_{current_assigment}-{str(index+1).zfill(2)}_circuit.brd',
-                            )
+                    # for index in range(results_count):
 
-                        all_results.nth(index).click()
+                    source_file = os.path.join(
+                        download_folder,
+                        f'{complete_name.replace(" ", "")}_{current_assigment}_code.ino',
+                    )
+                    pcb_file = os.path.join(
+                        download_folder,
+                        f'{complete_name.replace(" ", "")}_{current_assigment}_circuit.brd',
+                    )
 
-                        page.goto(f"{page.url}/editel")
+                    all_results.first.click()
 
-                        page.locator("#CODE_EDITOR_ID >> text=Code").click()
+                    page.goto(f"{page.url}/editel")
 
-                        with page.expect_download() as download_info:
-                            page.locator(".circ_btn.circ_btn--m_icon").first.click()
-                        download = download_info.value
-                        download.save_as(source_file)
-                        print(f"\t\tSaving {source_file}...")
+                    page.locator("#CODE_EDITOR_ID >> text=Code").click()
 
-                        page.locator("text=Send To").click()
+                    with page.expect_download() as download_info:
+                        page.locator(".circ_btn.circ_btn--m_icon").first.click()
+                    download = download_info.value
+                    download.save_as(source_file)
+                    print(f"\t\tSaving {source_file}...")
 
-                        with page.expect_download() as download_info:
-                            page.locator("text=.BRD").nth(1).click()
-                        download = download_info.value
-                        download.save_as(pcb_file)
-                        print(f"\t\tSaving {pcb_file}...\n")
+                    page.locator("text=Send To").click()
 
-                        page.goto(base_page)
-                        page.locator(f'h3:has-text("{current_assigment}")').nth(
-                            0
-                        ).wait_for()
-                        success = True
+                    with page.expect_download() as download_info:
+                        page.locator("text=.BRD").nth(1).click()
+                    download = download_info.value
+                    download.save_as(pcb_file)
+                    print(f"\t\tSaving {pcb_file}...\n")
+
+                    page.goto(base_page)
+                    page.locator(f'h3:has-text("{current_assigment}")').nth(
+                        0
+                    ).wait_for()
+                    success = True
                 except:
                     print(traceback.format_exc())
                     retries = retries - 1
@@ -149,11 +161,31 @@ def run(
 
 if __name__ == "__main__":
     start = datetime.datetime.now()
+
+    parser = configparser.ConfigParser()
+    parser.read(sys.argv[1])
+
+    try:
+        student_list = parser["tinkercad"]["students"].replace(" ", "").split(",")
+        if len(student_list) == 1 and len(student_list[0]) == 0:
+            student_list = []
+    except KeyError:
+        student_list = []
+
+    try:
+        headless = parser["tinkercad"].getboolean("headless")
+    except KeyError:
+        headless = True
+
     with sync_playwright() as playwright:
         run(
             playwright,
-            student_list=["luiza.2022"],
-            assigment_list=["E1T1"],  # , "E1T2", "E2T1", "E2T2", "E3T1"],
+            classroom_url=parser["tinkercad"]["classroom"],
+            user=parser["tinkercad"]["user"],
+            password=parser["tinkercad"]["password"],
+            student_list=student_list,
+            assigment_list=parser["tinkercad"]["questions"].replace(" ", "").split(","),
+            headless=headless,
         )
     end = datetime.datetime.now()
     print(f"Time elapsed: {end - start}s")
