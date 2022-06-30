@@ -13,6 +13,7 @@ ipython = "*"
 pyyaml = "*"
 pytest-cov = "*"
 playwright = "*"
+pandas = "*"
 
 [dev-packages]
 
