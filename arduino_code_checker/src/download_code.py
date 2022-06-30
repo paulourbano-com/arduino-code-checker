@@ -6,6 +6,7 @@ import os
 import sys
 import shutil
 import datetime
+from urllib.parse import urlparse
 
 
 def run(
@@ -82,6 +83,10 @@ def run(
             retries = retries - 1
 
     print(f"{student_list=}")
+    student_list_file = os.path.join(
+        download_folder,
+        "student_list.txt",
+    )
 
     for current_student in student_list:
         if len(current_student) == 0:
@@ -104,26 +109,31 @@ def run(
                         complete_name = page.locator(
                             f'a:has-text("{current_student}")'
                         ).first.inner_text()
+
                         page.locator(f'a:has-text("{current_student}")').first.click()
 
                     page.locator("#content >> text=Circuits").click()
 
+                    base_page = page.url
+                    unique_name = complete_name
+                    try:
+                        unique_name = urlparse(base_page).path.split("/")[2]
+                    except:
+                        print(traceback.format_exc())
+
+                    with open(student_list_file, "a", encoding="utf-8") as file_handle:
+                        file_handle.write(f"{complete_name.title()},{unique_name}\n")
+
                     all_results = page.locator(f'h3:has-text("{current_assigment}")')
                     all_results.nth(0).wait_for(timeout=15000)
 
-                    results_count = all_results.count()
-
-                    base_page = page.url
-
-                    # for index in range(results_count):
-
                     source_file = os.path.join(
                         download_folder,
-                        f'{complete_name.replace(" ", "")}_{current_assigment}_code.ino',
+                        f"{unique_name}_{current_assigment}_code.ino",
                     )
                     pcb_file = os.path.join(
                         download_folder,
-                        f'{complete_name.replace(" ", "")}_{current_assigment}_circuit.brd',
+                        f"{unique_name}_{current_assigment}_circuit.brd",
                     )
 
                     all_results.first.click()
