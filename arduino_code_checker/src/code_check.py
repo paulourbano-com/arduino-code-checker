@@ -1,4 +1,5 @@
 from __future__ import print_function
+from email.mime import base
 from glob import glob
 import sys
 from typing import List
@@ -183,17 +184,54 @@ def batch_compare(
     print(students)
 
     partial_solutions = []
+    # If there is a assignment to which the student
+    # did not submit a solution, compare non-existent
+    # files, creating an empty row.
+
+    # all_submission_student_id: List[str] = [
+    #     submission.replace(os.path.join(submissions_folder, ""), "").split("_")[0]
+    #     for submission in code_submissions
+    # ]
+
+    # all_submission_code = [
+    #     submission.replace(os.path.join(submissions_folder, ""), "").split("_")[1]
+    #     for submission in code_submissions
+    # ]
+
     for id in students.TinkerCAD_Id.unique():
-        for submission in code_submissions:
-            submission_student_id = submission.replace(
-                os.path.join(submissions_folder, ""), ""
-            ).split("_")[0]
-        base_return: pd.DataFrame = students.loc[students.TinkerCAD_Id == id].copy()
+        submitted_by = [
+            submission for submission in code_submissions if id in submission
+        ]
+        submitted_codes = [
+            submission.replace(os.path.join(submissions_folder, ""), "").split("_")[1]
+            for submission in submitted_by
+        ]
+        # for current_submission_code in all_submission_code:
+        missing_assignment_codes = set(assignment_list) - set(submitted_codes)
+
+        for missing_code in missing_assignment_codes:
+            base_return: pd.DataFrame = students.loc[students.TinkerCAD_Id == id].copy()
+            base_return["exercicio"] = missing_code
+
+            compare_results = compare_solution_assignment(
+                solution_file="non_existent.ino", assignment_file="non_existent.ino"
+            )
+
+            for key in compare_results.keys():
+                base_return[key] = compare_results.get(key)
+
+            base_return["codigo"] = "Arquivo não encontrado"
+            base_return["circuito"] = "Arquivo não encontrado"
+
+            partial_solutions.append(base_return)
 
     for solution in code_solutions:
         solution_code = solution.replace(os.path.join(solutions_folder, ""), "").split(
             "_"
         )[0]
+        if not solution_code in assignment_list:
+            continue
+
         for submission in code_submissions:
             submission_student_id = submission.replace(
                 os.path.join(submissions_folder, ""), ""
@@ -212,6 +250,8 @@ def batch_compare(
                 students.TinkerCAD_Id == submission_student_id
             ].copy()
 
+            base_return["exercicio"] = submission_code
+
             compare_results = compare_solution_assignment(
                 solution_file=solution, assignment_file=submission
             )
@@ -219,8 +259,14 @@ def batch_compare(
             for key in compare_results.keys():
                 base_return[key] = compare_results.get(key)
 
-            # print(base_return)
-            # print(compare_results)
+            submission_url = os.path.join(os.getcwd(), submission)
+            base_return["codigo"] = submission
+
+            # TODO: Add circuit link in circuit evaluation
+            brd = submission.replace("code.ino", "circuit.brd")
+            brd_url = os.path.join(os.getcwd(), brd)
+            base_return["circuito"] = brd
+
             partial_solutions.append(base_return)
 
     return_value = pd.concat(partial_solutions)
