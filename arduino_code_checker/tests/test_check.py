@@ -5,6 +5,8 @@ from arduino_code_checker.src.code_check import (
     compare_set_inner_func_calls,
     batch_compare,
 )
+from openpyxl.utils.dataframe import dataframe_to_rows
+import openpyxl
 
 
 def test_check_01():
@@ -62,7 +64,40 @@ def test_compare_setups():
 
 
 def test_compare_folders():
-    result = batch_compare("solutions", "sample_student_submissions")
+    result = batch_compare("solutions", "tinkercad_downloads", ["E1T1", "E1T2"])
+
+    codigo_col_index = list(result.columns).index("codigo") + 1
+    circuito_col_index = list(result.columns).index("circuito") + 1
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+
+    for r in dataframe_to_rows(result, index=False, header=True):
+        ws.append(r)
+
+    for row_index in range(3, len(result) + 2):
+        cod_cell = ws.cell(row=row_index, column=codigo_col_index)
+        circ_cell = ws.cell(row=row_index, column=circuito_col_index)
+
+        if cod_cell.value is not None and ".ino" in cod_cell.value:
+            cod_cell.hyperlink = f"file:///{os.path.join(os.getcwd(), cod_cell.value)}"
+            cod_cell.style = "Hyperlink"
+
+        if circ_cell.value is not None and ".brd" in circ_cell.value:
+            circ_cell.hyperlink = (
+                f"file:///{os.path.join(os.getcwd(), circ_cell.value)}"
+            )
+            circ_cell.style = "Hyperlink"
+
+        print(ws.cell(row=row_index, column=codigo_col_index).value)
+        print(ws.cell(row=row_index, column=circuito_col_index).value)
+        print()
+
+    ws.column_dimensions["A"].width = 30
+    for col_index in ["B", "C", "D", "E", "F"]:
+        ws.column_dimensions[col_index].width = 20
+
+    wb.save("test_result.xlsx")
 
     assert isinstance(result, pd.DataFrame)
     assert len(result) > 0
