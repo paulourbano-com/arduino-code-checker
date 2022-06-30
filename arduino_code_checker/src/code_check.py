@@ -1,10 +1,15 @@
 from __future__ import print_function
+from glob import glob
 import sys
+from typing import List
+import os
 import re
 import traceback
+from numpy import spacing
 from rich.pretty import pprint
 import argparse
 from copy import copy
+import pandas as pd
 
 # This is not required if you've installed pycparser into
 # your site-packages/ with setup.py
@@ -83,67 +88,146 @@ def get_ast_from_file(filename):
 def check_basic_elements(ast):
     return_value = False
 
-    v = FuncDefVisitor()
-    v.visit(ast)
+    if ast is not None:
+        v = FuncDefVisitor()
+        v.visit(ast)
 
-    if all([def_name in v.def_calls.keys() for def_name in ["loop", "setup"]]):
-        return_value = True
+        if all([def_name in v.def_calls.keys() for def_name in ["loop", "setup"]]):
+            return_value = True
 
     return return_value
 
 
 def compare_set_inner_func_calls(
-    outer_func_name: str, solution_file: str, assigment_file: str
+    outer_func_name: str, solution_file: str, assignment_file: str
 ):
     return_value = 100.0
 
     solution_ast = get_ast_from_file(solution_file)
-    assigment_ast = get_ast_from_file(assigment_file)
+    assignment_ast = get_ast_from_file(assignment_file)
 
-    solution_visitor = FuncDefVisitor()
-    solution_visitor.visit(solution_ast)
-    solution_calls = [
-        item
-        for x in solution_visitor.def_calls.get(outer_func_name)
-        for item in x.keys()
-    ]
+    if solution_ast is not None and assignment_ast is not None:
+        solution_visitor = FuncDefVisitor()
+        solution_visitor.visit(solution_ast)
+        solution_calls = [
+            item
+            for x in solution_visitor.def_calls.get(outer_func_name, {})
+            for item in x.keys()
+        ]
 
-    assigment_visitor = FuncDefVisitor()
-    assigment_visitor.visit(assigment_ast)
-    assigment_calls = [
-        item
-        for x in assigment_visitor.def_calls.get(outer_func_name)
-        for item in x.keys()
-    ]
+        assignment_visitor = FuncDefVisitor()
+        assignment_visitor.visit(assignment_ast)
+        assignment_calls = [
+            item
+            for x in assignment_visitor.def_calls.get(outer_func_name, {})
+            for item in x.keys()
+        ]
 
-    # If all functions called in the solution are not called in the assigment,
-    # lower the match score.
-    for call in set(solution_calls):
-        if not call in assigment_calls:
-            return_value = return_value - 1 / len(set(solution_calls))
+        # If all functions called in the solution are not called in the assignment,
+        # lower the match score.
+        for call in set(solution_calls):
+            if not call in assignment_calls:
+                return_value = return_value - (100.0 / len(set(solution_calls)))
+    else:
+        return_value = 0.0
 
     return return_value
 
 
-def compare_solution_assigment(solution_file: str, assigment_file: str):
+def compare_solution_assignment(solution_file: str, assignment_file: str):
 
-    percent_match = -1.0
+    return_value = {
+        "codigo_valido": 0.0,
+        "tem_setup_loop": 0.0,
+        "tem_chamadas_no_setup": 0.0,
+        "tem_chamadas_no_loop": 0.0,
+    }
 
-    solution_ast = get_ast_from_file(solution_file)
-    assigment_ast = get_ast_from_file(assigment_file)
+    assignment_ast = get_ast_from_file(assignment_file)
 
-    # Checks if the assigment can be parsed and if the assigments
+    # Checks if the assignment can be parsed and if the assignments
     # fullfills the basic requirements of an Arduino source file,
     # e.g. having function definitions for 'loop' and 'setup'
-    if assigment_ast is not None and check_basic_elements(assigment_ast):
-        setup_match = compare_set_inner_func_calls(
-            "setup", solution_file, assigment_file
-        )
-        loop_match = compare_set_inner_func_calls("loop", solution_file, assigment_file)
+    if assignment_ast is not None:
+        return_value["codigo_valido"] = 100.0
 
-        percent_match = sum([setup_match, loop_match]) / 2
+    if check_basic_elements(assignment_ast):
+        return_value["tem_setup_loop"] = 100.0
 
-    return percent_match
+    return_value["tem_chamadas_no_setup"] = compare_set_inner_func_calls(
+        "setup", solution_file, assignment_file
+    )
+
+    return_value["tem_chamadas_no_loop"] = compare_set_inner_func_calls(
+        "loop", solution_file, assignment_file
+    )
+
+    return return_value
+
+
+def batch_compare(
+    solutions_folder: str, submissions_folder: str, assignment_list: List[str]
+):
+    return_value = pd.DataFrame()
+
+    code_solutions: List[str] = glob(os.path.join(solutions_folder, "*.ino"))
+    code_submissions: List[str] = glob(os.path.join(submissions_folder, "*.ino"))
+
+    students: pd.DataFrame = pd.read_csv(
+        os.path.join(submissions_folder, "student_list.txt"), header=None
+    )
+    students.columns = ["Nome", "TinkerCAD_Id"]
+    students.drop_duplicates(inplace=True)
+
+    print(code_solutions)
+    print(students)
+
+    partial_solutions = []
+    for id in students.TinkerCAD_Id.unique():
+        for submission in code_submissions:
+            submission_student_id = submission.replace(
+                os.path.join(submissions_folder, ""), ""
+            ).split("_")[0]
+        base_return: pd.DataFrame = students.loc[students.TinkerCAD_Id == id].copy()
+
+    for solution in code_solutions:
+        solution_code = solution.replace(os.path.join(solutions_folder, ""), "").split(
+            "_"
+        )[0]
+        for submission in code_submissions:
+            submission_student_id = submission.replace(
+                os.path.join(submissions_folder, ""), ""
+            ).split("_")[0]
+
+            submission_code = submission.replace(
+                os.path.join(submissions_folder, ""), ""
+            ).split("_")[1]
+
+            print(submission_student_id, submission_code)
+
+            if solution_code != submission_code:
+                continue
+
+            base_return: pd.DataFrame = students.loc[
+                students.TinkerCAD_Id == submission_student_id
+            ].copy()
+
+            compare_results = compare_solution_assignment(
+                solution_file=solution, assignment_file=submission
+            )
+
+            for key in compare_results.keys():
+                base_return[key] = compare_results.get(key)
+
+            # print(base_return)
+            # print(compare_results)
+            partial_solutions.append(base_return)
+
+    return_value = pd.concat(partial_solutions)
+
+    print(return_value)
+
+    return return_value
 
 
 if __name__ == "__main__":
@@ -151,16 +235,16 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--solution_folder",
-        help="Folder containing source code (.ino) and Eagle PCB () files for base solution.",
+        help="Folder containing source code (.ino) and Eagle PCB (.brd) files for base solution.",
         type=str,
         default="solution",
     )
 
     parser.add_argument(
-        "--assigments_folder",
-        help="Folder containing source code (.ino) and Eagle PCB () files for assignment solutions.",
+        "--assignments_folder",
+        help="Folder containing source code (.ino) and Eagle PCB (.brd) files for assignment solutions.",
         type=str,
-        default="assigments",
+        default="assignments",
     )
 
     args = parser.parse_args().__dict__
