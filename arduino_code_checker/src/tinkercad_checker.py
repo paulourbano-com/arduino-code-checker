@@ -8,6 +8,7 @@ from arduino_code_checker.src.code_check import batch_compare
 from arduino_code_checker.src.download_code import run
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.styles import Alignment
+from openpyxl.worksheet.table import Table, TableStyleInfo
 import openpyxl
 
 if __name__ == "__main__":
@@ -72,6 +73,13 @@ if __name__ == "__main__":
     for r in dataframe_to_rows(result, index=False, header=True):
         ws.append(r)
 
+    from openpyxl.styles import Font
+
+    fontStyle = Font(size="13")
+
+    for title_index in range(1, 20):
+        ws.cell(row=1, column=title_index).font = fontStyle
+
     for row_index in range(2, len(result) + 2):
         cod_cell = ws.cell(row=row_index, column=codigo_col_index)
         circ_cell = ws.cell(row=row_index, column=circuito_col_index)
@@ -91,8 +99,22 @@ if __name__ == "__main__":
             circ_cell.style = "Hyperlink"
 
     ws.column_dimensions["A"].width = 30
-    for col_index in ["B", "C", "D", "E", "F"]:
-        ws.column_dimensions[col_index].width = 20
+    for col_index in ["B", "C", "D", "E", "F", "G"]:
+        ws.column_dimensions[col_index].width = 25
+
+    tab = Table(displayName="Table1", ref=f"A1:I{len(result) + 2}")
+
+    # Add a default style with striped rows and banded columns
+    style = TableStyleInfo(
+        name="TableStyleMedium9",
+        showFirstColumn=False,
+        showLastColumn=False,
+        showRowStripes=True,
+        showColumnStripes=False,
+    )
+    tab.tableStyleInfo = style
+
+    ws.add_table(tab)
 
     wb.save(f"evaluation_{datetime.datetime.now().strftime('%Y-%m-%d-%H_%M_%S')}.xlsx")
     end = datetime.datetime.now()
