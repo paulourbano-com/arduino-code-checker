@@ -64,7 +64,13 @@ def test_compare_setups():
 
 
 def test_compare_folders():
-    result = batch_compare("solutions", "tinkercad_downloads", ["E1T1", "E1T2"])
+    result = batch_compare(
+        "solutions",
+        "tinkercad_downloads_2022-06-30-21_15_06",
+        ["E1T1", "E1T2", "E2T1", "E2T2", "E3T1"],
+    )
+
+    result.sort_values(by=result.columns[0], inplace=True)
 
     codigo_col_index = list(result.columns).index("codigo") + 1
     circuito_col_index = list(result.columns).index("circuito") + 1
@@ -89,9 +95,9 @@ def test_compare_folders():
             )
             circ_cell.style = "Hyperlink"
 
-        print(ws.cell(row=row_index, column=codigo_col_index).value)
-        print(ws.cell(row=row_index, column=circuito_col_index).value)
-        print()
+        # print(ws.cell(row=row_index, column=codigo_col_index).value)
+        # print(ws.cell(row=row_index, column=circuito_col_index).value)
+        # print()
 
     ws.column_dimensions["A"].width = 30
     for col_index in ["B", "C", "D", "E", "F"]:
