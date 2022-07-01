@@ -11,6 +11,7 @@ from rich.pretty import pprint
 import argparse
 from copy import copy
 import pandas as pd
+import pycparser
 
 # This is not required if you've installed pycparser into
 # your site-packages/ with setup.py
@@ -77,11 +78,15 @@ def get_ast_from_file(filename):
 
         # Remove comments
         file_contents_no_comments = comment_remover(file_contents)
+        file_contents_no_comments = file_contents_no_comments.replace("bool", "int")
 
         parser = c_parser.CParser()
         ast = parser.parse(file_contents_no_comments, filename=filename)
-    except (FileNotFoundError, AssertionError):
-        print(traceback.format_exc())
+    except (FileNotFoundError, AssertionError, pycparser.plyparser.ParseError) as e:
+        pass
+        # print(traceback.format_exc())
+        # if isinstance(e, pycparser.plyparser.ParseError):
+        #     input()
 
     return ast
 
@@ -123,6 +128,8 @@ def compare_set_inner_func_calls(
             for x in assignment_visitor.def_calls.get(outer_func_name, {})
             for item in x.keys()
         ]
+
+        # print(solution_calls, assignment_calls)
 
         # If all functions called in the solution are not called in the assignment,
         # lower the match score.
@@ -180,8 +187,8 @@ def batch_compare(
     students.columns = ["Nome", "TinkerCAD_Id"]
     students.drop_duplicates(inplace=True)
 
-    print(code_solutions)
-    print(students)
+    # print(code_solutions)
+    # print(students)
 
     partial_solutions = []
     # If there is a assignment to which the student
@@ -241,7 +248,7 @@ def batch_compare(
                 os.path.join(submissions_folder, ""), ""
             ).split("_")[1]
 
-            print(submission_student_id, submission_code)
+            # print(submission_student_id, submission_code)
 
             if solution_code != submission_code:
                 continue
@@ -271,7 +278,7 @@ def batch_compare(
 
     return_value = pd.concat(partial_solutions)
 
-    print(return_value)
+    # print(return_value)
 
     return return_value
 
