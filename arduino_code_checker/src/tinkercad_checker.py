@@ -7,17 +7,20 @@ from playwright.sync_api import Playwright, sync_playwright, expect
 from arduino_code_checker.src.code_check import batch_compare
 from arduino_code_checker.src.download_code import run
 from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.styles import Alignment
 import openpyxl
 
 if __name__ == "__main__":
     start = datetime.datetime.now()
-
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument(
         "--config_file", help="Configuration file", type=str, default="config.ini"
     )
     arg_parser.add_argument(
         "--solutions_folder", help="Solutions folder", type=str, default="solutions"
+    )
+    arg_parser.add_argument(
+        "--download_folder", help="Download folder", type=str, default=""
     )
 
     args = arg_parser.parse_args().__dict__
@@ -38,25 +41,30 @@ if __name__ == "__main__":
         headless = True
 
     assignment_list = parser["tinkercad"]["questions"].replace(" ", "").split(",")
-    with sync_playwright() as playwright:
-        download_folder = run(
-            playwright,
-            classroom_url=parser["tinkercad"]["classroom"],
-            user=parser["tinkercad"]["user"],
-            password=parser["tinkercad"]["password"],
-            student_list=student_list,
-            assigment_list=assignment_list,
-            headless=headless,
-        )
-    end = datetime.datetime.now()
-    print(download_folder)
+
+    if len(args.get("download_folder")) == 0:
+        with sync_playwright() as playwright:
+            download_folder = run(
+                playwright,
+                classroom_url=parser["tinkercad"]["classroom"],
+                user=parser["tinkercad"]["user"],
+                password=parser["tinkercad"]["password"],
+                student_list=student_list,
+                assigment_list=assignment_list,
+                headless=headless,
+            )
+    else:
+        download_folder = args.get("download_folder")
 
     result = batch_compare(
         args.get("solutions_folder"), download_folder, assignment_list
     )
+    result.drop(result.columns[1], axis=1, inplace=True)
+    result.sort_values(by=[result.columns[0], result.columns[1]], inplace=True)
 
     codigo_col_index = list(result.columns).index("codigo") + 1
     circuito_col_index = list(result.columns).index("circuito") + 1
+    error_col_index = list(result.columns).index("erro_codigo") + 1
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -64,9 +72,13 @@ if __name__ == "__main__":
     for r in dataframe_to_rows(result, index=False, header=True):
         ws.append(r)
 
-    for row_index in range(3, len(result) + 2):
+    for row_index in range(2, len(result) + 2):
         cod_cell = ws.cell(row=row_index, column=codigo_col_index)
         circ_cell = ws.cell(row=row_index, column=circuito_col_index)
+        ws.cell(row=row_index, column=error_col_index).alignment = Alignment(
+            wrap_text=True
+        )
+        ws.cell(row=row_index, column=circuito_col_index + 1).value = " "
 
         if cod_cell.value is not None and ".ino" in cod_cell.value:
             cod_cell.hyperlink = f"file:///{os.path.join(os.getcwd(), cod_cell.value)}"
@@ -78,13 +90,11 @@ if __name__ == "__main__":
             )
             circ_cell.style = "Hyperlink"
 
-        print(ws.cell(row=row_index, column=codigo_col_index).value)
-        print(ws.cell(row=row_index, column=circuito_col_index).value)
-        print()
-
     ws.column_dimensions["A"].width = 30
     for col_index in ["B", "C", "D", "E", "F"]:
         ws.column_dimensions[col_index].width = 20
 
     wb.save(f"evaluation_{datetime.datetime.now().strftime('%Y-%m-%d-%H_%M_%S')}.xlsx")
+    end = datetime.datetime.now()
+
     print(f"Time elapsed: {end - start}s")
