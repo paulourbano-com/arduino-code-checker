@@ -2,6 +2,7 @@ import datetime
 import configparser
 import argparse
 import sys
+import os
 from playwright.sync_api import Playwright, sync_playwright, expect
 from arduino_code_checker.src.code_check import batch_compare
 from arduino_code_checker.src.download_code import run
