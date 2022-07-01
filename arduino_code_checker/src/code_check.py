@@ -11,6 +11,7 @@ from rich.pretty import pprint
 import argparse
 from copy import copy
 import pandas as pd
+import pycparser
 
 # This is not required if you've installed pycparser into
 # your site-packages/ with setup.py
@@ -69,6 +70,7 @@ def comment_remover(text):
 
 def get_ast_from_file(filename):
     ast = None
+    error_message = ""
 
     try:
         file_contents = ""
@@ -77,13 +79,16 @@ def get_ast_from_file(filename):
 
         # Remove comments
         file_contents_no_comments = comment_remover(file_contents)
+        file_contents_no_comments = file_contents_no_comments.replace("bool", "int")
 
         parser = c_parser.CParser()
         ast = parser.parse(file_contents_no_comments, filename=filename)
-    except (FileNotFoundError, AssertionError):
-        print(traceback.format_exc())
+    except (FileNotFoundError, AssertionError, pycparser.plyparser.ParseError) as e:
+        # print(traceback.format_exc())
+        if isinstance(e, pycparser.plyparser.ParseError):
+            error_message = traceback.format_exc().split("\n")[-2]
 
-    return ast
+    return ast, error_message
 
 
 def check_basic_elements(ast):
@@ -104,8 +109,8 @@ def compare_set_inner_func_calls(
 ):
     return_value = 100.0
 
-    solution_ast = get_ast_from_file(solution_file)
-    assignment_ast = get_ast_from_file(assignment_file)
+    solution_ast, _ = get_ast_from_file(solution_file)
+    assignment_ast, _ = get_ast_from_file(assignment_file)
 
     if solution_ast is not None and assignment_ast is not None:
         solution_visitor = FuncDefVisitor()
@@ -124,6 +129,8 @@ def compare_set_inner_func_calls(
             for item in x.keys()
         ]
 
+        # print(solution_calls, assignment_calls)
+
         # If all functions called in the solution are not called in the assignment,
         # lower the match score.
         for call in set(solution_calls):
@@ -139,12 +146,13 @@ def compare_solution_assignment(solution_file: str, assignment_file: str):
 
     return_value = {
         "codigo_valido": 0.0,
+        "erro_codigo": "",
         "tem_setup_loop": 0.0,
         "tem_chamadas_no_setup": 0.0,
         "tem_chamadas_no_loop": 0.0,
     }
 
-    assignment_ast = get_ast_from_file(assignment_file)
+    assignment_ast, return_value["erro_codigo"] = get_ast_from_file(assignment_file)
 
     # Checks if the assignment can be parsed and if the assignments
     # fullfills the basic requirements of an Arduino source file,
@@ -180,8 +188,8 @@ def batch_compare(
     students.columns = ["Nome", "TinkerCAD_Id"]
     students.drop_duplicates(inplace=True)
 
-    print(code_solutions)
-    print(students)
+    # print(code_solutions)
+    # print(students)
 
     partial_solutions = []
     # If there is a assignment to which the student
@@ -241,7 +249,7 @@ def batch_compare(
                 os.path.join(submissions_folder, ""), ""
             ).split("_")[1]
 
-            print(submission_student_id, submission_code)
+            # print(submission_student_id, submission_code)
 
             if solution_code != submission_code:
                 continue
@@ -271,7 +279,7 @@ def batch_compare(
 
     return_value = pd.concat(partial_solutions)
 
-    print(return_value)
+    # print(return_value)
 
     return return_value
 

@@ -20,6 +20,10 @@ def run(
     headless: bool = False,
 ) -> None:
 
+    download_folder = (
+        f'{download_folder}_{datetime.datetime.now().strftime("%Y-%m-%d-%H_%M_%S")}'
+    )
+
     if os.path.isdir(download_folder):
         shutil.rmtree(download_folder)
 
@@ -167,6 +171,8 @@ def run(
 
     context.close()
     browser.close()
+
+    return download_folder
 
 
 if __name__ == "__main__":
