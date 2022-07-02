@@ -11,7 +11,8 @@ from openpyxl.styles import Alignment
 from openpyxl.worksheet.table import Table, TableStyleInfo
 import openpyxl
 
-if __name__ == "__main__":
+
+def main():
     start = datetime.datetime.now()
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument(
@@ -89,13 +90,15 @@ if __name__ == "__main__":
         ws.cell(row=row_index, column=circuito_col_index + 1).value = " "
 
         if cod_cell.value is not None and ".ino" in cod_cell.value:
-            cod_cell.hyperlink = f"file:///{os.path.join(os.getcwd(), cod_cell.value)}"
+            # cod_cell.hyperlink = f"file:///{os.path.join(os.getcwd(), cod_cell.value)}"
+            cod_cell.hyperlink = cod_cell.value
             cod_cell.style = "Hyperlink"
 
         if circ_cell.value is not None and ".brd" in circ_cell.value:
-            circ_cell.hyperlink = (
-                f"file:///{os.path.join(os.getcwd(), circ_cell.value)}"
-            )
+            # circ_cell.hyperlink = (
+            #     f"file:///{os.path.join(os.getcwd(), circ_cell.value)}"
+            # )
+            circ_cell.hyperlink = circ_cell.value
             circ_cell.style = "Hyperlink"
 
     ws.column_dimensions["A"].width = 30
@@ -120,3 +123,7 @@ if __name__ == "__main__":
     end = datetime.datetime.now()
 
     print(f"Time elapsed: {end - start}s")
+
+
+if __name__ == "__main__":
+    main()
