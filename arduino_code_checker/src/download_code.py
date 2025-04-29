@@ -19,10 +19,9 @@ def run(
     download_folder: str = "tinkercad_downloads",
     headless: bool = False,
 ) -> None:
+    tinkercad_url = "https://www.tinkercad.com"
 
-    download_folder = (
-        f'{download_folder}_{datetime.datetime.now().strftime("%Y-%m-%d-%H_%M_%S")}'
-    )
+    download_folder = f"{download_folder}_{datetime.datetime.now().strftime('%Y-%m-%d-%H_%M_%S')}"
 
     if os.path.isdir(download_folder):
         shutil.rmtree(download_folder)
@@ -72,9 +71,7 @@ def run(
         try:
             page.goto(classroom_url)
             with page.expect_navigation():
-                locator = page.locator(
-                    "//span[contains(@class, 'name ng-star-inserted')]"
-                )
+                locator = page.locator("//span[contains(@class, 'name ng-star-inserted')]")
             locator.nth(0).wait_for(timeout=10000)
 
             count_rows = locator.count()
@@ -128,8 +125,9 @@ def run(
                     with open(student_list_file, "a", encoding="utf-8") as file_handle:
                         file_handle.write(f"{complete_name.title()},{unique_name}\n")
 
-                    all_results = page.locator(f'h3:has-text("{current_assigment}")')
-                    all_results.nth(0).wait_for(timeout=15000)
+                    # all_results = page.get_by_text(current_assigment, exact=False)
+                    all_results = page.locator(f"a[href]:has-text('{current_assigment}')")
+                    all_results.nth(0).wait_for(timeout=3000)
 
                     source_file = os.path.join(
                         download_folder,
@@ -140,8 +138,9 @@ def run(
                         f"{unique_name}_{current_assigment}_circuit.brd",
                     )
 
-                    all_results.first.click()
 
+                    page.goto(tinkercad_url + all_results.first.get_attribute("href"))
+                    
                     page.goto(f"{page.url}/editel")
 
                     page.locator("#CODE_EDITOR_ID >> text=Code").click()
@@ -161,9 +160,7 @@ def run(
                     print(f"\t\tSaving {pcb_file}...\n")
 
                     page.goto(base_page)
-                    page.locator(f'h3:has-text("{current_assigment}")').nth(
-                        0
-                    ).wait_for()
+                    page.locator(f"a[href]:has-text('{current_assigment}')").wait_for()
                     success = True
                 except:
                     print(traceback.format_exc())
