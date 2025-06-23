@@ -1,4 +1,5 @@
 import traceback
+import time
 import configparser
 from playwright.sync_api import Playwright, sync_playwright, expect
 from typing import List, Optional
@@ -79,11 +80,22 @@ def run(
             student_list = []
             for index in range(count_rows):
                 student_name = locator.nth(index).inner_text()
-                student_list.append(student_name)
-        except:
+                # student_list.append(student_name)
+
+                student_href = locator.nth(index).locator("//a").get_attribute("href")
+
+                student_id = student_href.split("/")
+                if len(student_id) > 0:
+                    student_id = student_id[-1].split("?")[0]
+                    
+                student_list.append((student_name, student_href, student_id))
+        except Exception as e:
+            print(traceback.format_exc())
             retries = retries - 1
 
     print(f"{student_list=}")
+
+    # sys.exit(0)
     student_list_file = os.path.join(
         download_folder,
         "student_list.txt",
@@ -93,78 +105,222 @@ def run(
         if len(current_student) == 0:
             continue
 
-        print(f"\n{current_student=}")
+        print(f"\n{current_student[0]=}")
 
-        for current_assigment in assigment_list:
-            retries = 3
-            success = False
+        with page.expect_navigation():
+            page.goto(tinkercad_url + current_student[1])
+            # input("Got to student page")
+            
+        map_circuit_name_url = {}
+        try:
+            page.locator("#content >> text=Circuits").click()
+            time.sleep(2)
+            all_results = page.locator("//a[contains(@class, 'ng-star-inserted')]")
 
-            while retries > 0 and not success:
-                print(f"\t{current_assigment=}")
+            for result in all_results.all():
+                circuit_name = result.inner_text()
+                circuit_url = result.get_attribute("href")
+                if len(circuit_name) > 0:
+                    print("\n", circuit_name, " | ", circuit_url)
+                    map_circuit_name_url[circuit_name] = circuit_url
 
-                page.goto(classroom_url)
+            # input("Results for student")
+        except Exception:
+            print(traceback.format_exc())
 
-                try:
-                    with page.expect_navigation():
-                        # page.locator(f"text={current_student}").click()
-                        complete_name = page.locator(
-                            f'a:has-text("{current_student}")'
-                        ).first.inner_text()
+        for circuit_name in map_circuit_name_url.keys():
+            
+            for current_assigment in assigment_list:
+                if current_assigment not in circuit_name:
+                    continue
+                
+                retries = 3
+                success = False
+                
+                print(current_student[0], current_assigment, circuit_name)
+                
+                source_file = os.path.join(
+                    download_folder,
+                    f"{current_student[2]}_{current_assigment}_code.ino",
+                )
+                pcb_file = os.path.join(
+                    download_folder,
+                    f"{current_student[2]}_{current_assigment}_circuit.brd",
+                )
 
-                        page.locator(f'a:has-text("{current_student}")').first.click()
+                while retries > 0 and not success:
 
-                    page.locator("#content >> text=Circuits").click()
-
-                    base_page = page.url
-                    unique_name = complete_name
                     try:
-                        unique_name = urlparse(base_page).path.split("/")[2]
-                    except:
-                        print(traceback.format_exc())
 
-                    with open(student_list_file, "a", encoding="utf-8") as file_handle:
-                        file_handle.write(f"{complete_name.title()},{unique_name}\n")
-
-                    # all_results = page.get_by_text(current_assigment, exact=False)
-                    all_results = page.locator(f"a[href]:has-text('{current_assigment}')")
-                    all_results.nth(0).wait_for(timeout=3000)
-
-                    source_file = os.path.join(
-                        download_folder,
-                        f"{unique_name}_{current_assigment}_code.ino",
-                    )
-                    pcb_file = os.path.join(
-                        download_folder,
-                        f"{unique_name}_{current_assigment}_circuit.brd",
-                    )
-
-
-                    page.goto(tinkercad_url + all_results.first.get_attribute("href"))
+                        page.goto(tinkercad_url + map_circuit_name_url.get(circuit_name))
                     
-                    page.goto(f"{page.url}/editel")
+                        page.goto(f"{page.url}/editel")
 
-                    page.locator("#CODE_EDITOR_ID >> text=Code").click()
+                        page.locator("#CODE_EDITOR_ID >> text=Code").click()
 
-                    with page.expect_download() as download_info:
-                        page.locator(".circ_btn.circ_btn--m_icon").first.click()
-                    download = download_info.value
-                    download.save_as(source_file)
-                    print(f"\t\tSaving {source_file}...")
+                        with page.expect_download() as download_info:
+                            page.locator(".circ_btn.circ_btn--m_icon").first.click()
+                        
+                        download = download_info.value
+                        download.save_as(source_file)
+                    
+                        print(f"\t\tSaving {source_file}...")
 
-                    page.locator("text=Send To").click()
+                        page.locator("text=Send To").click()
 
-                    with page.expect_download() as download_info:
-                        page.locator("text=.BRD").nth(1).click()
-                    download = download_info.value
-                    download.save_as(pcb_file)
-                    print(f"\t\tSaving {pcb_file}...\n")
+                        with page.expect_download() as download_info:
+                            page.locator("text=.BRD").nth(1).click()
+                        
+                        download = download_info.value
+                        download.save_as(pcb_file)
+                    
+                        print(f"\t\tSaving {pcb_file}...\n")
 
-                    page.goto(base_page)
-                    page.locator(f"a[href]:has-text('{current_assigment}')").wait_for()
-                    success = True
-                except:
-                    print(traceback.format_exc())
-                    retries = retries - 1
+                    
+                        with open(student_list_file, "a", encoding="utf-8") as file_handle:
+                            file_handle.write(f"{current_student[0].title()},{current_student[2]}\n")
+
+                        success = True
+
+                    except Exception:
+                        print(traceback.format_exc())
+                        retries -= retries
+
+                    
+                    # try:
+                    #     with page.expect_navigation():
+                    #         # page.locator(f"text={current_student}").click()
+                    #         complete_name = page.locator(
+                    #             f'a:has-text("{current_student}")'
+                    #         ).first.inner_text()
+
+                    #         page.locator(f'a:has-text("{current_student}")').first.click()
+
+                    #     page.locator("#content >> text=Circuits").click()
+
+                    #     base_page = page.url
+                    #     unique_name = complete_name
+                    #     try:
+                    #         unique_name = urlparse(base_page).path.split("/")[2]
+                    #     except:
+                    #         print(traceback.format_exc())
+
+                    #     with open(student_list_file, "a", encoding="utf-8") as file_handle:
+                    #         file_handle.write(f"{complete_name.title()},{unique_name}\n")
+
+                    #     # all_results = page.get_by_text(current_assigment, exact=False)
+                    #     all_results = page.locator(f"a[href]:has-text('{current_assigment}')")
+                    #     all_results.nth(0).wait_for(timeout=3000)
+
+                    #     source_file = os.path.join(
+                    #         download_folder,
+                    #         f"{unique_name}_{current_assigment}_code.ino",
+                    #     )
+                    #     pcb_file = os.path.join(
+                    #         download_folder,
+                    #         f"{unique_name}_{current_assigment}_circuit.brd",
+                    #     )
+
+
+                    #     page.goto(tinkercad_url + all_results.first.get_attribute("href"))
+                    
+                    #     page.goto(f"{page.url}/editel")
+
+                    #     page.locator("#CODE_EDITOR_ID >> text=Code").click()
+
+                    #     with page.expect_download() as download_info:
+                    #         page.locator(".circ_btn.circ_btn--m_icon").first.click()
+                    #     download = download_info.value
+                    #     download.save_as(source_file)
+                    #     print(f"\t\tSaving {source_file}...")
+
+                    #     page.locator("text=Send To").click()
+
+                    #     with page.expect_download() as download_info:
+                    #         page.locator("text=.BRD").nth(1).click()
+                    #     download = download_info.value
+                    #     download.save_as(pcb_file)
+                    #     print(f"\t\tSaving {pcb_file}...\n")
+
+                    #     page.goto(base_page)
+                    #     page.locator(f"a[href]:has-text('{current_assigment}')").wait_for()
+                    #     success = True
+                    # except:
+                    #     print(traceback.format_exc())
+                    #     retries = retries - 1
+
+        # continue
+
+        # for current_assigment in assigment_list:
+        #     retries = 3
+        #     success = False
+
+        #     while retries > 0 and not success:
+        #         print(f"\t{current_assigment=}")
+
+        #         page.goto(classroom_url)
+
+        #         try:
+        #             with page.expect_navigation():
+        #                 # page.locator(f"text={current_student}").click()
+        #                 complete_name = page.locator(
+        #                     f'a:has-text("{current_student}")'
+        #                 ).first.inner_text()
+
+        #                 page.locator(f'a:has-text("{current_student}")').first.click()
+
+        #             page.locator("#content >> text=Circuits").click()
+
+        #             base_page = page.url
+        #             unique_name = complete_name
+        #             try:
+        #                 unique_name = urlparse(base_page).path.split("/")[2]
+        #             except:
+        #                 print(traceback.format_exc())
+
+        #             with open(student_list_file, "a", encoding="utf-8") as file_handle:
+        #                 file_handle.write(f"{complete_name.title()},{unique_name}\n")
+
+        #             # all_results = page.get_by_text(current_assigment, exact=False)
+        #             all_results = page.locator(f"a[href]:has-text('{current_assigment}')")
+        #             all_results.nth(0).wait_for(timeout=3000)
+
+        #             source_file = os.path.join(
+        #                 download_folder,
+        #                 f"{unique_name}_{current_assigment}_code.ino",
+        #             )
+        #             pcb_file = os.path.join(
+        #                 download_folder,
+        #                 f"{unique_name}_{current_assigment}_circuit.brd",
+        #             )
+
+
+        #             page.goto(tinkercad_url + all_results.first.get_attribute("href"))
+                    
+        #             page.goto(f"{page.url}/editel")
+
+        #             page.locator("#CODE_EDITOR_ID >> text=Code").click()
+
+        #             with page.expect_download() as download_info:
+        #                 page.locator(".circ_btn.circ_btn--m_icon").first.click()
+        #             download = download_info.value
+        #             download.save_as(source_file)
+        #             print(f"\t\tSaving {source_file}...")
+
+        #             page.locator("text=Send To").click()
+
+        #             with page.expect_download() as download_info:
+        #                 page.locator("text=.BRD").nth(1).click()
+        #             download = download_info.value
+        #             download.save_as(pcb_file)
+        #             print(f"\t\tSaving {pcb_file}...\n")
+
+        #             page.goto(base_page)
+        #             page.locator(f"a[href]:has-text('{current_assigment}')").wait_for()
+        #             success = True
+        #         except:
+        #             print(traceback.format_exc())
+        #             retries = retries - 1
 
     context.close()
     browser.close()

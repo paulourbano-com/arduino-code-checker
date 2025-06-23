@@ -20,17 +20,31 @@ sys.path.extend([".", ".."])
 from pycparser import c_ast, parse_file
 from pycparser import c_parser
 
+def get_name(arg):
+    return_value = "not_found"
+
+    try:
+        return_value = arg.name
+    except Exception:
+        print(traceback.format_exc())
+
+    return return_value
 
 class FuncCallVisitor(c_ast.NodeVisitor):
     def __init__(self):
         self.callees = []
 
     def visit_FuncCall(self, node):
+        if node.args is None:
+            return
+        # for arg in node.args:
+        #     print(dir(arg))
+        #     input()
 
         self.callees.append(
             {
                 node.name.name: [
-                    arg.value if isinstance(arg, c_ast.Constant) else arg.name
+                    arg.value if isinstance(arg, c_ast.Constant) else get_name(arg)
                     for arg in node.args
                 ]
             }
